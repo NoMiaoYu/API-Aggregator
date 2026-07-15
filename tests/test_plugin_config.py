@@ -126,10 +126,38 @@ def test_plugin_config_missing_token(tmp_path: Path):
         PluginLoader.load_plugin(p)
 
 
-def test_plugin_config_missing_description(tmp_path: Path):
+def test_plugin_config_missing_description_defaults_to_empty(tmp_path: Path):
+    """description 可选；缺省时 PluginConfig.description = ""。"""
     body = '''
         PLUGIN_CONFIG = {
             "name": "n", "token": "t",
+            "endpoints": [{"path": "/api/a", "protocols": ["http"]}],
+            "fields": {},
+        }
+    '''
+    p = _write_plugin(tmp_path / "p.py", body)
+    cfg = PluginLoader.load_plugin(p)
+    assert cfg.description == ""
+
+
+def test_plugin_config_missing_fields_defaults_to_empty_dict(tmp_path: Path):
+    """fields 可选；缺省时 PluginConfig.fields = {}。"""
+    body = '''
+        PLUGIN_CONFIG = {
+            "name": "n", "token": "t", "description": "d",
+            "endpoints": [{"path": "/api/a", "protocols": ["http"]}],
+        }
+    '''
+    p = _write_plugin(tmp_path / "p.py", body)
+    cfg = PluginLoader.load_plugin(p)
+    assert cfg.fields == {}
+
+
+def test_plugin_config_description_wrong_type_raises(tmp_path: Path):
+    """description 类型非 str 仍需报错。"""
+    body = '''
+        PLUGIN_CONFIG = {
+            "name": "n", "token": "t", "description": 123,
             "endpoints": [{"path": "/api/a", "protocols": ["http"]}],
             "fields": {},
         }
@@ -139,16 +167,32 @@ def test_plugin_config_missing_description(tmp_path: Path):
         PluginLoader.load_plugin(p)
 
 
-def test_plugin_config_missing_fields(tmp_path: Path):
+def test_plugin_config_fields_wrong_type_raises(tmp_path: Path):
+    """fields 类型非 dict 仍需报错。"""
     body = '''
         PLUGIN_CONFIG = {
             "name": "n", "token": "t", "description": "d",
             "endpoints": [{"path": "/api/a", "protocols": ["http"]}],
+            "fields": "oops",
         }
     '''
     p = _write_plugin(tmp_path / "p.py", body)
     with pytest.raises(PluginConfigError):
         PluginLoader.load_plugin(p)
+
+
+def test_plugin_config_both_description_and_fields_optional(tmp_path: Path):
+    """description + fields 同时省略也能成功加载（最小化配置）。"""
+    body = '''
+        PLUGIN_CONFIG = {
+            "name": "n", "token": "t",
+            "endpoints": [{"path": "/api/a", "protocols": ["http"]}],
+        }
+    '''
+    p = _write_plugin(tmp_path / "p.py", body)
+    cfg = PluginLoader.load_plugin(p)
+    assert cfg.description == ""
+    assert cfg.fields == {}
 
 
 def test_plugin_config_missing_endpoints(tmp_path: Path):

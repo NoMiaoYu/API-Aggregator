@@ -3,15 +3,19 @@
 每个插件是一个 Python 文件，声明一个 PLUGIN_CONFIG 字典，结构：
 
     PLUGIN_CONFIG = {
-        "name": str,
-        "token": str,
-        "description": str,
+        "name": str,           # 必填
+        "token": str,          # 必填
         "endpoints": [EndpointDict, ...],   # 必填非空
-        "fields": {field_name: FieldMeta, ...},
+        "description": str,    # 可选，缺省 ""；可被 per-endpoint description 覆盖
+        "fields": dict,        # 可选，缺省 {}；可被 per-endpoint fields 整体替换
     }
 
 endpoint dict 形如：
     {"path": "/api/xxx", "protocols": ["http", "ws"], "exclude_from_all": False}
+
+顶层 ``description`` / ``fields`` 与 ``EndpointSpec.description`` / ``EndpointSpec.fields``
+保持一致的"可选 + 回退"语义，docs 渲染时由
+:func:`app.docs_gen.generator._resolve_doc` 统一合并。
 """
 
 from __future__ import annotations
@@ -168,21 +172,32 @@ class PluginLoader:
         if not isinstance(cfg, dict):
             raise PluginConfigError(f"插件 {path} 的 PLUGIN_CONFIG 必须是 dict")
 
-        required = ("name", "token", "description", "fields", "endpoints")
+        required = ("name", "token", "endpoints")
         missing = [k for k in required if k not in cfg]
         if missing:
             raise PluginConfigError(f"插件 {path} 缺少字段: {missing}")
 
-        if not isinstance(cfg["fields"], dict):
-            raise PluginConfigError(f"插件 {path} 的 fields 必须是 dict")
+        # description 可选（缺省 ""；可被 per-endpoint description 覆盖）
+        description = cfg.get("description", "")
+        if not isinstance(description, str):
+            raise PluginConfigError(
+                f"插件 {path} 的 description 必须是 str"
+            )
+
+        # fields 可选（缺省 {}；可被 per-endpoint fields 整体替换）
+        fields = cfg.get("fields", {})
+        if not isinstance(fields, dict):
+            raise PluginConfigError(
+                f"插件 {path} 的 fields 必须是 dict"
+            )
 
         endpoints = PluginLoader._parse_endpoints(path, cfg["endpoints"])
 
         return PluginConfig(
             name=str(cfg["name"]),
             token=str(cfg["token"]),
-            description=str(cfg["description"]),
-            fields=dict(cfg["fields"]),
+            description=description,
+            fields=dict(fields),
             endpoints=endpoints,
             file_path=path,
         )
