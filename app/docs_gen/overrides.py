@@ -22,15 +22,21 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+logger = logging.getLogger(__name__)
+
 
 class DocsOverridesError(Exception):
-    """docs_overrides.yaml 解析错误。"""
+    """docs_overrides.yaml 解析错误（仅用于"文件级"硬错误：读不到 / 顶层非 dict /
+    endpoints 节点非 dict / 单条 entry 内部字段类型错）。单条 entry 的 key 非法
+    走"记录 WARNING 后跳过"路径，不抛错。
+    """
 
 
 @dataclass(frozen=True)
@@ -90,17 +96,26 @@ class DocsOverrides:
 
         by_path: dict[str, EndpointOverride] = {}
         for ep_path, ep_data in endpoints_raw.items():
-            by_path[cls._validate_key(path, ep_path)] = cls._parse_entry(
-                path, ep_path, ep_data
-            )
+            key = cls._validate_key(path, ep_path)
+            if key is None:
+                # 非法 key 已记 WARNING；不阻塞同文件其他合法 entry
+                continue
+            by_path[key] = cls._parse_entry(path, key, ep_data)
         return cls(by_path)
 
     @staticmethod
-    def _validate_key(file: Path, key: Any) -> str:
+    def _validate_key(file: Path, key: Any) -> str | None:
+        """校验 endpoint key：合法返回 key，非法返回 ``None``（不抛错）。
+
+        非法 key 仅记 WARNING 并由 ``load`` 跳过——同一文件里的其他合法
+        endpoint 不受影响。
+        """
         if not isinstance(key, str) or not key.startswith("/api/"):
-            raise DocsOverridesError(
-                f"{file}: endpoint key 必须是 '/api/...' 字符串，跳过 {key!r}"
+            logger.warning(
+                "[%s] 忽略非法 endpoint key: %r（必须是 '/api/...' 字符串）",
+                file, key,
             )
+            return None
         return key
 
     @classmethod

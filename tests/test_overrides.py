@@ -86,20 +86,58 @@ def test_load_yaml_without_endpoints_key(tmp_path: Path):
 
 
 # ------------------------- 校验：endpoint key 必须是 /api/... 字符串 -------------------------
+# 非法 key 走"记录 WARNING + 跳过"路径，不抛错、不阻塞其他合法 endpoint。
 
 
-def test_load_rejects_non_string_key(tmp_path: Path):
+def test_load_skips_non_string_key(tmp_path: Path, caplog):
+    """非字符串 key：忽略并跳过，同文件其他合法 endpoint 仍加载。"""
     yaml_path = tmp_path / "bad.yaml"
-    yaml_path.write_text("endpoints:\n  123: {}\n", encoding="utf-8")
-    with pytest.raises(DocsOverridesError, match="endpoint key"):
-        DocsOverrides.load(yaml_path)
+    yaml_path.write_text(
+        "endpoints:\n  /api/foo:\n    description: ok\n  123: {}\n",
+        encoding="utf-8",
+    )
+    with caplog.at_level("WARNING", logger="app.docs_gen.overrides"):
+        overrides = DocsOverrides.load(yaml_path)
+    # 合法 /api/foo 仍加载
+    assert overrides.get("/api/foo") is not None
+    # 非法 123 被跳过（不在结果中）
+    assert 123 not in overrides
+    # 记了 WARNING
+    assert any("忽略非法 endpoint key" in rec.message for rec in caplog.records)
 
 
-def test_load_rejects_key_without_api_prefix(tmp_path: Path):
+def test_load_skips_key_without_api_prefix(
+    tmp_path: Path, caplog
+):
+    """非 /api/ 前缀的 key：忽略并跳过，同文件其他合法 endpoint 仍加载。"""
     yaml_path = tmp_path / "bad.yaml"
-    yaml_path.write_text("endpoints:\n  /foo: {}\n", encoding="utf-8")
-    with pytest.raises(DocsOverridesError, match="/api/"):
-        DocsOverrides.load(yaml_path)
+    yaml_path.write_text(
+        "endpoints:\n  /api/foo: {}\n  /bar: {}\n",
+        encoding="utf-8",
+    )
+    with caplog.at_level("WARNING", logger="app.docs_gen.overrides"):
+        overrides = DocsOverrides.load(yaml_path)
+    # 合法 /api/foo 仍加载
+    assert overrides.get("/api/foo") is not None
+    # 非法 /bar 被跳过
+    assert "/bar" not in overrides
+    # 记了 WARNING
+    assert any("忽略非法 endpoint key" in rec.message for rec in caplog.records)
+
+
+def test_load_skips_multiple_invalid_keys_does_not_raise(tmp_path: Path):
+    """同一文件有多个非法 key：全部跳过，不抛错。"""
+    yaml_path = tmp_path / "bad.yaml"
+    yaml_path.write_text(
+        "endpoints:\n"
+        "  1: {}\n"            # 非字符串
+        "  /no-prefix: {}\n"   # 无 /api/ 前缀
+        "  /api/valid: {}\n",  # 合法
+        encoding="utf-8",
+    )
+    overrides = DocsOverrides.load(yaml_path)
+    # 只有 /api/valid 被加载
+    assert list(overrides.paths()) == ["/api/valid"]
 
 
 # ------------------------- 校验：endpoint value 必须是 dict -------------------------
