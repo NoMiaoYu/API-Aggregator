@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>{{ endpoint.path }} · API Aggregator</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+           margin: 0; padding: 32px; color: #1f2328; background: #ffffff; }
+    h1 { font-size: 26px; margin: 0 0 8px; }
+    h2 { font-size: 18px; margin: 24px 0 8px; }
+    .meta { color: #656d76; font-size: 13px; margin-bottom: 16px; }
+    a { color: #0969da; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { background: #f6f8fa; padding: 2px 6px; border-radius: 4px; font-size: 12.5px; }
+    table { border-collapse: collapse; width: 100%; border: 1px solid #d0d7de; border-radius: 6px; overflow: hidden; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #d0d7de; font-size: 14px; }
+    th { background: #f6f8fa; font-weight: 600; }
+    tr:last-child td { border-bottom: 0; }
+    .pill { display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 11px; margin-right: 4px;
+            background: #ddf4ff; color: #0969da; }
+    .pill.excluded { background: #fff8c5; color: #9a6700; }
+  </style>
+</head>
+<body>
+  <h1><code>{{ endpoint.path }}</code></h1>
+  <div class="meta">来源：<strong>{{ plugin_name }}</strong> · v{{ version }} · <a href="index.html">返回列表</a> · <a href="all.html">/all</a></div>
+
+  <h2>协议</h2>
+  <p>
+    {% for p in endpoint.protocols %}<span class="pill">{{ p }}</span>{% endfor %}
+    {% if endpoint.exclude_from_all %}<span class="pill excluded">exclude_from_all</span>{% endif %}
+  </p>
+
+  {% if plugin_description %}
+  <h2>说明</h2>
+  <p>{{ plugin_description }}</p>
+  {% endif %}
+
+  <h2>字段</h2>
+  {% if fields %}
+  <table>
+    <thead>
+      <tr><th>字段</th><th>类型</th><th>可空</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      {% for name, meta in fields.items() %}
+      <tr>
+        <td><code>{{ name }}</code></td>
+        <td>{{ meta.type or '' }}</td>
+        <td>{{ '是' if meta.nullable else '否' }}</td>
+        <td>{{ meta.description or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>无字段说明。</p>
+  {% endif %}
+</body>
+</html>
