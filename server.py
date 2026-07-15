@@ -52,8 +52,13 @@ async def _serve(
             ", ".join(f"{ep.path} [{'/'.join(ep.protocols)}]" for ep in p.endpoints),
         )
 
-    # 2) 生成文档
-    generate_docs(plugins, version=__version__, output_dir=docs_dir)
+    # 2) 生成文档（加载项目根 docs_overrides.yaml 作为用户覆盖）
+    generate_docs(
+        plugins,
+        version=__version__,
+        output_dir=docs_dir,
+        overrides_path=plugins_dir.parent / "docs_overrides.yaml",
+    )
     logger.info("文档已生成到 %s", docs_dir)
 
     # 3) 创建 app

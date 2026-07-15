@@ -1,0 +1,18 @@
+# docs_overrides.yaml
+# ----------------------------------------------------------------------------
+# 全局 endpoint 文档配置（用户编辑此文件即可定制所有 API 端点的说明与字段）。
+# 优先级：此文件 > 插件 PLUGIN_CONFIG.endpoints[].description/fields > plugin 级。
+# 文件不存在时，docs 完全使用插件内置默认。
+#
+# 字段 schema（与 PluginLoader 兼容）：
+#   type: string | number | object | array | boolean | null
+#   nullable: true | false
+#   description: 人类可读的说明
+#
+# 任何 endpoint 都可以从下面任选一个策略：
+#   1) 完整覆盖 description + fields
+#   2) 只覆盖 description（fields 仍走插件默认）
+#   3) 只覆盖 fields（fields 为 dict 时整体替换）
+# ----------------------------------------------------------------------------
+
+endpoints: {}

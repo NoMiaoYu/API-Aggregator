@@ -17,7 +17,7 @@ endpoint dict 形如：
 from __future__ import annotations
 
 import importlib.util
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -34,11 +34,19 @@ class DuplicateEndpointError(PluginConfigError):
 
 @dataclass(frozen=True)
 class EndpointSpec:
-    """单个 endpoint 的元数据。"""
+    """单个 endpoint 的元数据。
+
+    ``description`` / ``fields`` 是可选的，per-endpoint 独立。
+    - ``description``：本端点的语义说明（如"地震速报 / 本地有感地震"）。
+    - ``fields``：本端点 Data 负载内字段的描述（{name: {type, nullable, description}}）。
+    若未设置，docs 渲染时回退到 plugin 级 ``description`` / ``fields``。
+    """
 
     path: str
     protocols: list[str]
     exclude_from_all: bool = False
+    description: str = ""
+    fields: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -70,6 +78,75 @@ class PluginLoader:
     """从单个 .py 文件或整个目录加载插件配置。"""
 
     @staticmethod
+    def _parse_endpoint(
+        plugin_path: Path, index: int, ep: Any
+    ) -> EndpointSpec:
+        """校验并转换单条 endpoint dict → EndpointSpec。"""
+        if not isinstance(ep, dict):
+            raise PluginConfigError(
+                f"插件 {plugin_path} endpoints[{index}] 不是 dict"
+            )
+        if "path" not in ep or "protocols" not in ep:
+            raise PluginConfigError(
+                f"插件 {plugin_path} endpoints[{index}] 缺少 path/protocols"
+            )
+        ep_path = ep["path"]
+        protocols = ep["protocols"]
+        if not isinstance(ep_path, str) or not ep_path.startswith("/api/"):
+            raise PluginConfigError(
+                f"插件 {plugin_path} endpoints[{index}].path "
+                f"必须以 /api/ 开头: {ep_path!r}"
+            )
+        if (
+            not isinstance(protocols, list)
+            or len(protocols) == 0
+            or not all(
+                isinstance(p, str) and p in VALID_PROTOCOLS for p in protocols
+            )
+        ):
+            raise PluginConfigError(
+                f"插件 {plugin_path} endpoints[{index}].protocols 非法: {protocols!r}"
+            )
+        ep_desc = ep.get("description", "")
+        ep_fields_raw = ep.get("fields", {})
+        if not isinstance(ep_desc, str):
+            raise PluginConfigError(
+                f"插件 {plugin_path} endpoints[{index}].description 必须是 str"
+            )
+        if not isinstance(ep_fields_raw, dict):
+            raise PluginConfigError(
+                f"插件 {plugin_path} endpoints[{index}].fields 必须是 dict"
+            )
+        return EndpointSpec(
+            path=ep_path,
+            protocols=list(protocols),
+            exclude_from_all=bool(ep.get("exclude_from_all", False)),
+            description=ep_desc,
+            fields=dict(ep_fields_raw),
+        )
+
+    @staticmethod
+    def _parse_endpoints(
+        plugin_path: Path, endpoints_raw: Any
+    ) -> list[EndpointSpec]:
+        """校验并转换 endpoints 列表。"""
+        if not isinstance(endpoints_raw, list) or len(endpoints_raw) == 0:
+            raise PluginConfigError(
+                f"插件 {plugin_path} 的 endpoints 必须是非空 list"
+            )
+        endpoints: list[EndpointSpec] = []
+        seen_paths: set[str] = set()
+        for i, ep in enumerate(endpoints_raw):
+            spec = PluginLoader._parse_endpoint(plugin_path, i, ep)
+            if spec.path in seen_paths:
+                raise PluginConfigError(
+                    f"插件 {plugin_path} 内部 endpoint 重复: {spec.path}"
+                )
+            seen_paths.add(spec.path)
+            endpoints.append(spec)
+        return endpoints
+
+    @staticmethod
     def load_plugin(path: str | Path) -> PluginConfig:
         path = Path(path)
         if not path.is_file():
@@ -81,7 +158,7 @@ class PluginLoader:
         module = importlib.util.module_from_spec(spec)
         try:
             spec.loader.exec_module(module)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             raise PluginConfigError(f"执行插件 {path} 失败: {exc}") from exc
 
         if not hasattr(module, "PLUGIN_CONFIG"):
@@ -91,54 +168,15 @@ class PluginLoader:
         if not isinstance(cfg, dict):
             raise PluginConfigError(f"插件 {path} 的 PLUGIN_CONFIG 必须是 dict")
 
-        # 顶层必填字段
         required = ("name", "token", "description", "fields", "endpoints")
         missing = [k for k in required if k not in cfg]
         if missing:
             raise PluginConfigError(f"插件 {path} 缺少字段: {missing}")
 
-        endpoints_raw = cfg["endpoints"]
-        if not isinstance(endpoints_raw, list) or len(endpoints_raw) == 0:
-            raise PluginConfigError(f"插件 {path} 的 endpoints 必须是非空 list")
-
-        endpoints: list[EndpointSpec] = []
-        seen_paths: set[str] = set()
-        for i, ep in enumerate(endpoints_raw):
-            if not isinstance(ep, dict):
-                raise PluginConfigError(f"插件 {path} endpoints[{i}] 不是 dict")
-            if "path" not in ep or "protocols" not in ep:
-                raise PluginConfigError(
-                    f"插件 {path} endpoints[{i}] 缺少 path/protocols"
-                )
-            ep_path = ep["path"]
-            protocols = ep["protocols"]
-            if not isinstance(ep_path, str) or not ep_path.startswith("/api/"):
-                raise PluginConfigError(
-                    f"插件 {path} endpoints[{i}].path 必须以 /api/ 开头: {ep_path!r}"
-                )
-            if (
-                not isinstance(protocols, list)
-                or len(protocols) == 0
-                or not all(isinstance(p, str) and p in VALID_PROTOCOLS for p in protocols)
-            ):
-                raise PluginConfigError(
-                    f"插件 {path} endpoints[{i}].protocols 非法: {protocols!r}"
-                )
-            if ep_path in seen_paths:
-                raise PluginConfigError(
-                    f"插件 {path} 内部 endpoint 重复: {ep_path}"
-                )
-            seen_paths.add(ep_path)
-            endpoints.append(
-                EndpointSpec(
-                    path=ep_path,
-                    protocols=list(protocols),
-                    exclude_from_all=bool(ep.get("exclude_from_all", False)),
-                )
-            )
-
         if not isinstance(cfg["fields"], dict):
             raise PluginConfigError(f"插件 {path} 的 fields 必须是 dict")
+
+        endpoints = PluginLoader._parse_endpoints(path, cfg["endpoints"])
 
         return PluginConfig(
             name=str(cfg["name"]),

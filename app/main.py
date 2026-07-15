@@ -61,8 +61,28 @@ def create_app(
     return app
 
 
-def generate_docs(plugins: list[PluginConfig], version: str, output_dir: str | Path) -> None:
-    """生成静态文档（实际渲染在 docs_gen/ 模块里）。"""
-    from app.docs_gen.generator import DocsGenerator
+def generate_docs(
+    plugins: list[PluginConfig],
+    version: str,
+    output_dir: str | Path,
+    overrides_path: str | Path | None = None,
+) -> None:
+    """生成静态文档（实际渲染在 docs_gen/ 模块里）。
 
-    DocsGenerator(plugins, version=version, output_dir=output_dir).generate()
+    ``overrides_path``：项目根 ``docs_overrides.yaml`` 路径。
+    文件不存在时使用插件内置默认。
+    """
+    from app.docs_gen.generator import DocsGenerator
+    from app.docs_gen.overrides import DocsOverrides
+
+    overrides = (
+        DocsOverrides.load(overrides_path)
+        if overrides_path is not None
+        else DocsOverrides()
+    )
+    DocsGenerator(
+        plugins,
+        version=version,
+        output_dir=output_dir,
+        overrides=overrides,
+    ).generate()
