@@ -74,18 +74,13 @@ async def supervise_plugin(
 ) -> None:
     """统一管理一组异步 task 的生命周期。
 
-    - ``asyncio.gather(..., return_exceptions=True)``；
-    - 收到 ``CancelledError`` 时 set stop_event + cancel 所有 task；
-    - ``finally`` 块统一 cancel + 可选关闭 client。
+    - ``asyncio.gather(..., return_exceptions=True)`` 等待所有 task；
+    - ``finally`` 块统一 ``set stop_event`` + ``cancel`` 全部 task +
+      按需 ``close`` client；不管正常返回还是 ``CancelledError`` 都走这条路径。
     """
     task_list = list(tasks)
     try:
         await asyncio.gather(*task_list, return_exceptions=True)
-    except asyncio.CancelledError:
-        stop_event.set()
-        for t in task_list:
-            t.cancel()
-        raise
     finally:
         stop_event.set()
         for t in task_list:
