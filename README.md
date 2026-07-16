@@ -3,38 +3,41 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-161%20passed-brightgreen.svg)](./tests)
+[![Tests](https://img.shields.io/badge/tests-180%20passed-brightgreen.svg)](./tests)
 [![Pylint](https://img.shields.io/badge/pylint-10.00%2F10-brightgreen.svg)](./.pylintrc)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
+[![Lang: EN](https://img.shields.io/badge/lang-EN%20%7C%20ZH-blue.svg)](./README.zh.md)
 
 
-一个基于 **FastAPI + 插件子进程** 的实时数据聚合网关。  
-每个上游数据源 = 一个独立 Python 进程；主进程负责 HTTP/WS 路由、内存缓存、文档生成、生命周期管理。
+A real-time data aggregation gateway built on **FastAPI + plugin subprocesses**.  
+Each upstream data source = one isolated Python process; the main process owns HTTP/WS routing, in-memory cache, documentation generation, and lifecycle management.
 
-> 设计目标：上游故障**不污染**主进程，插件可热替换，文档随插件自动生成。
+> Design goal: upstream failures **never poison** the main process, plugins are hot-swappable, docs auto-generate from plugin configs.
 
----
-
-## 特性
-
-- **进程级隔离**：每个插件独立子进程，崩溃自动重启（最多 5 次），可独立 `kill` 不影响主程序
-- **统一回调协议**：插件用 `PluginClient` 把上游数据 `push` 回主进程，token 鉴权
-- **HTTP + WebSocket 双协议**：每个 endpoint 声明 `protocols: ["http", "ws"]`，下游按需消费
-- **聚合 WS 端点 `/ws/all`**：单条 WS 连接收到所有 `exclude_from_all=False` 端点的最新快照与增量更新
-- **md5 去重**：HTTP 轮询插件仅在数据变化时推送
-- **静态文档自动生成**：Jinja2 渲染 `docs/`，用户可在 `docs_overrides.yaml` 覆盖默认说明，无需改代码
-- **结构化错误推送**：插件内 `report_error` → 主进程 → WS 订阅者即时看到
+[中文文档](./README.zh.md)
 
 ---
 
-## 快速开始
+## Features
 
-### 环境要求
+- **Process-level isolation**: each plugin runs in its own subprocess, auto-restart on crash (up to 5 times), can be `kill`ed without affecting the main process
+- **Unified callback protocol**: plugins use `PluginClient` to `push` upstream data back to the main process, token-authenticated
+- **HTTP + WebSocket dual protocols**: each endpoint declares `protocols: ["http", "ws"]`; downstream consumers pick what they need
+- **Aggregated WS endpoint `/ws/all`**: a single WebSocket connection receives latest snapshots and incremental updates for every `exclude_from_all=False` endpoint
+- **md5 deduplication**: HTTP-polling plugins only push when data actually changes
+- **Static docs auto-generated**: Jinja2 renders `docs/`, users can override defaults via `docs_overrides.yaml` without touching code
+- **Structured error push**: `report_error` inside a plugin → main process → WS subscribers see it instantly
+
+---
+
+## Quick Start
+
+### Requirements
 
 - Python ≥ 3.10
 - Windows / macOS / Linux
 
-### 安装
+### Install
 
 ```bash
 git clone https://github.com/<your-username>/api-aggregator.git
@@ -42,44 +45,44 @@ cd api-aggregator
 pip install -r requirements.txt
 ```
 
-### 启动
+### Run
 
 ```bash
 python server.py
-# 或带参数：
+# or with arguments:
 python run.py --host 0.0.0.0 --port 8000 --no-auto-start
 ```
 
-启动成功后会看到：
+Successful startup shows:
 
 ```
 ============================================================
-服务已就绪 v0.1.0
-  HTTP 列表:    http://127.0.0.1:8000/
-  WS   /ws/all:  ws://127.0.0.1:8000/ws/all
-  文档首页:     http://127.0.0.1:8000/doc/ws-api/
+Service ready v0.1.0
+  HTTP list:   http://127.0.0.1:8000/
+  WS   /ws/all: ws://127.0.0.1:8000/ws/all
+  Docs home:   http://127.0.0.1:8000/doc/ws-api/
 ============================================================
 ```
 
-### 验证
+### Verify
 
 ```bash
-# 列出全部 endpoint
+# List all endpoints
 curl http://127.0.0.1:8000/
 
-# 读单端点最新数据
+# Read latest data for a single endpoint
 curl http://127.0.0.1:8000/api/cenc
 
-# 订阅单端点 WS
+# Subscribe to a single endpoint over WS
 websocat ws://127.0.0.1:8000/ws/api/cenc
 
-# 订阅全聚合
+# Subscribe to the aggregated feed
 websocat ws://127.0.0.1:8000/ws/all
 ```
 
-> `/api/all` 是 WS 专用聚合端点，对它的 HTTP 请求会返回 `405 Method Not Allowed`。
+> `/api/all` is a WebSocket-only aggregator. HTTP requests to it return `405 Method Not Allowed`.
 
-### 运行测试
+### Run tests
 
 ```bash
 python -m pytest tests/ -q
@@ -87,43 +90,49 @@ python -m pytest tests/ -q
 
 ---
 
-## 项目结构
+## Project Structure
 
 ```
 api-aggregator/
-├── server.py              # 浏览器测试入口（uvicorn + 插件拉起）
-├── run.py                 # CLI 入口（支持 --host/--port/--no-auto-start/...）
+├── server.py              # Browser-test entry (uvicorn + plugin startup)
+├── run.py                 # CLI entry (--host/--port/--no-auto-start/...)
+├── config.yaml            # Global project config (language, server, plugins, ...)
+├── docs_overrides.yaml    # User-editable endpoint doc overrides
 ├── requirements.txt
-├── docs_overrides.yaml    # 用户可编辑的 endpoint 文档覆盖
-├── .pylintrc              # pylint 10.00/10 配套配置
+├── .pylintrc              # pylint config tuned to 10.00/10
 │
-├── app/                   # 主程序
-│   ├── main.py            # FastAPI 工厂 + 插件加载 + 文档生成入口
-│   ├── api/               # HTTP / WebSocket / callback / docs 路由
-│   ├── core/cache.py      # 内存缓存（latest-only）
-│   ├── plugins/           # 插件 SDK
-│   │   ├── config.py      #   PLUGIN_CONFIG 加载与校验
-│   │   ├── client.py      #   PluginClient（push / report_error）
-│   │   ├── _runtime.py    #   safe_push / supervise_plugin 共享 helper
-│   │   └── manager.py     #   插件子进程生命周期 + 自动重启
-│   └── docs_gen/          # 静态文档生成（Jinja2）
+├── app/                   # Main program
+│   ├── main.py            # FastAPI factory + plugin loading + docs entry
+│   ├── api/               # HTTP / WebSocket / callback / docs routes
+│   ├── core/
+│   │   ├── cache.py       # In-memory cache (latest-only)
+│   │   └── config.py      # Global config loader (AppConfig)
+│   ├── plugins/           # Plugin SDK
+│   │   ├── config.py      #   PLUGIN_CONFIG loader and validator
+│   │   ├── client.py      #   PluginClient (push / report_error)
+│   │   ├── _runtime.py    #   safe_push / supervise_plugin shared helpers
+│   │   └── manager.py     #   Subprocess lifecycle + auto-restart
+│   └── docs_gen/          # Static doc generation (Jinja2)
 │
-├── plugins/               # 插件目录（每个 .py = 一个子进程）
-│   ├── README.md          #   插件开发指南
-│   └── (空)               #   用户按指南在此目录放自己的插件
+├── plugins/               # Plugin directory (each .py = one subprocess)
+│   ├── README.md          #   Plugin authoring guide
+│   └── (empty)            #   Users drop their own plugins here
 │
-├── logs/                  # 运行时日志（启动时自动创建，已 gitignore）
-├── docs/                  # 生成的静态文档（启动时自动生成，已 gitignore）
-└── tests/                 # 单元测试
+├── docs/                  # Generated static docs (regenerated on start)
+│   ├── en/                #   English tutorials
+│   └── zh/                #   Chinese tutorials
+│
+├── logs/                  # Runtime logs (auto-created, gitignored)
+└── tests/                 # Unit tests
 ```
 
 ---
 
-## 架构
+## Architecture
 
 ```
                     ┌─────────────────────────────┐
-                    │   主进程 (server.py / uvicorn) │
+                    │  Main process (server.py)    │
                     │                              │
    HTTP /api/x ───► │  app/api/endpoints.py       │
    WS  /ws/api/x──► │  app/api/websocket.py       │
@@ -135,25 +144,58 @@ api-aggregator/
             ┌────────────────────┼────────────────────┐
             ▼                    ▼                    ▼
      plugins/<your>.py     plugins/<your>.py     plugins/<your>.py
-     (WS / HTTP / 轮询)      (WS / HTTP / 轮询)    (WS / HTTP / 轮询)
+     (WS / HTTP / poll)     (WS / HTTP / poll)    (WS / HTTP / poll)
             │                    │                    │
             └──► PluginClient.push() ────►  /api/internal/callback/data
 ```
 
-**关键点**：
-- 插件是**独立进程**，主程序通过 HTTP 回调接收数据
-- 一个插件可以有 N 个 endpoint（`PLUGIN_CONFIG.endpoints`），但只跑**一个**子进程
-- 同一插件的多个 endpoint **共享**上游连接（自己写 plugin 时可让单条上游连接 fan-out 推多个 endpoint）
-- 插件崩溃 → `PluginManager` watcher 任务自动重启（指数退避，最多 5 次）
+**Key points**:
+- Plugins are **separate processes**; the main process receives data via HTTP callback
+- One plugin can expose N endpoints (`PLUGIN_CONFIG.endpoints`), but only spawns **one** subprocess
+- Multiple endpoints of the same plugin can **share** upstream connections (your plugin code can fan-out a single upstream connection to many endpoints)
+- Plugin crash → `PluginManager` watcher auto-restarts it (exponential backoff, up to 5 times)
 
 ---
 
-## 写一个新插件
+## Global Configuration (`config.yaml`)
 
-完整指南见 [`plugins/README.md`](./plugins/README.md)。最小骨架：
+Edit the project-root `config.yaml` to change runtime behaviour; restart the server to apply. Missing keys are auto-filled with defaults (see [`app/core/config.py`](./app/core/config.py)).
+
+```yaml
+language: en            # en | zh   — UI / docs language
+server:
+  host: 127.0.0.1
+  port: 8000
+  log_level: INFO
+callback:
+  base_path: /api/internal/callback
+plugins:
+  directory: plugins
+  start_timeout: 30
+  max_restarts: 5
+docs:
+  output_dir: docs
+  overrides_file: docs_overrides.yaml
+```
+
+Programmatic access:
 
 ```python
-"""我的数据源插件。"""
+from app.core.config import AppConfig
+cfg = AppConfig.load("config.yaml")
+print(cfg.language)        # "en" or "zh"
+print(cfg.server.port)     # 8000
+print(cfg.is_zh)           # False
+```
+
+---
+
+## Write a New Plugin
+
+Full guide: [`plugins/README.md`](./plugins/README.md) and the [endpoint tutorial (EN)](./docs/en/endpoint-tutorial.md) / [端点教程 (中文)](./docs/zh/endpoint-tutorial.md). Minimal skeleton:
+
+```python
+"""My data-source plugin."""
 import asyncio, logging, sys
 from typing import Any
 from app.plugins._runtime import safe_push, safe_report_error, supervise_plugin
@@ -168,7 +210,7 @@ ENDPOINTS = [
 PLUGIN_CONFIG = {
     "name": "my_plugin",
     "token": "my-plugin-change-me",
-    "description": "一句话说明",
+    "description": "One-line description",
     "endpoints": ENDPOINTS,
     "fields": {},
 }
@@ -176,7 +218,7 @@ PLUGIN_CONFIG = {
 async def _run(client, stop_event):
     while not stop_event.is_set():
         try:
-            data = await fetch()  # 你自己实现
+            data = await fetch()  # your upstream fetch
             await safe_push(client, "/api/my-source", data)
         except Exception as exc:
             await safe_report_error(client, "/api/my-source", "FETCH_FAILED", str(exc))
@@ -201,62 +243,62 @@ if __name__ == "__main__":
     asyncio.run(start(_url, _tok))
 ```
 
-放进 `plugins/` 后下次启动自动加载。
+Drop it into `plugins/` and it will be loaded automatically on the next startup.
 
-### `PLUGIN_CONFIG` 字段
+### `PLUGIN_CONFIG` fields
 
-| 字段 | 类型 | 必填 | 说明 |
+| Field | Type | Required | Notes |
 |---|---|---|---|
-| `name` | str | ✅ | 插件名（也是 `/all` 顶层 key） |
-| `token` | str | ✅ | 回调鉴权 Bearer token |
-| `description` | str | ✅ | 一句话说明 |
-| `endpoints` | list | ✅ | 至少 1 项 |
-| `fields` | dict | ✅ | 字段文档（可空） |
+| `name` | str | ✅ | Plugin name (also the `/all` top-level key) |
+| `token` | str | ✅ | Bearer token for callback auth |
+| `endpoints` | list | ✅ | At least 1 entry |
+| `description` | str | ❌ | Plugin-level description (overridable per-endpoint) |
+| `fields` | dict | ❌ | Plugin-level field docs (overridable per-endpoint) |
 
-`endpoints[].`：
+`endpoints[]`:
 
-| 字段 | 必填 | 说明 |
+| Field | Required | Notes |
 |---|---|---|
-| `path` | ✅ | 必须以 `/api/` 开头；跨插件全局唯一 |
-| `protocols` | ✅ | `["http", "ws"]` 的非空子集 |
-| `exclude_from_all` | ❌ | 默认 `False`；`True` 表示不进入 `/all` 聚合 |
-| `description` / `fields` | ❌ | per-endpoint 文档，覆盖 plugin 级 |
+| `path` | ✅ | Must start with `/api/`; globally unique across all plugins |
+| `protocols` | ✅ | Non-empty subset of `["http", "ws"]` |
+| `exclude_from_all` | ❌ | Default `False`; `True` opts out of `/all` aggregation |
+| `description` / `fields` | ❌ | Per-endpoint docs, override plugin-level |
 
 ---
 
-## 文档系统
+## Documentation System
 
-### 三层优先级
+### Three-level priority
 
 ```
-docs_overrides.yaml（项目根）
+docs_overrides.yaml (project root)
     > PLUGIN_CONFIG.endpoints[].description / fields
     > PLUGIN_CONFIG.description / fields
 ```
 
-### 用户覆盖 `docs_overrides.yaml`
+### User override `docs_overrides.yaml`
 
 ```yaml
 endpoints:
   /api/cwa:
     description: |
-      在此填写这个 endpoint 的功能、数据来源、更新频率等。
+      Describe what this endpoint does, data source, update frequency, etc.
     fields:
       field_name:
         type: string
         nullable: false
-        description: 字段说明
+        description: Field description
 ```
 
-启动时自动重新生成 `docs/`，并在 `http://127.0.0.1:8000/doc/ws-api/` 暴露。
+Docs regenerate on startup and are served at `http://127.0.0.1:8000/doc/ws-api/`.
 
-> `fields` 是**整体替换**而非按 key 合并 —— 这避免覆盖/默认字段定义不一致时文档错位。
+> `fields` is **whole-replacement** rather than key-by-key merge — this avoids doc/data drift when the override's field definition differs from the default.
 
 ---
 
-## API 协议
+## API Protocol
 
-### 内部回调（插件 → 主程序）
+### Internal callback (plugin → main process)
 
 ```
 POST /api/internal/callback/data
@@ -265,8 +307,8 @@ Content-Type: application/json
 
 {
   "endpoint": "/api/cwa",
-  "data": { ... 任意 JSON ... },
-  "md5": "abc123...",        // 可选，缺省时主程序计算
+  "data": { ... any JSON ... },
+  "md5": "abc123...",        // optional; main process computes if absent
   "timestamp": 1721000000,
   "source": "cwa"
 }
@@ -285,13 +327,13 @@ Authorization: Bearer <token>
 }
 ```
 
-### HTTP 客户端
+### HTTP client
 
 ```
 GET /api/<endpoint>
-→ 200 + 最新数据（JSON）
-→ 404 endpoint 不存在
-→ 503 尚未收到任何数据
+→ 200 + latest data (JSON)
+→ 404 endpoint does not exist
+→ 503 no data received yet
 ```
 
 ### WebSocket
@@ -303,40 +345,40 @@ WS /ws/api/<endpoint>
 → {"type": "error",    "endpoint": "...", "error_type": "...", "message": "..."}
 
 WS /ws/all
-→ 首次：{"type": "initial_all", "<source>": {Data, md5}, ...}
-→ 增量：{"type": "update", "source": "...", "Data": ..., "md5": "..."}
+→ initial: {"type": "initial_all", "<source>": {Data, md5}, ...}
+→ delta:   {"type": "update", "source": "...", "Data": ..., "md5": "..."}
 ```
 
 ---
 
-## 开发约定
+## Development Conventions
 
-- **代码质量**：`python -m pylint --rcfile=.pylintrc plugins/ app/ run.py server.py` 维持 10.00/10
-- **测试**：`python -m pytest tests/ -q`，161 个用例
-- **日志**：只用 `INFO` / `WARNING` / `ERROR`；正常连接不刷；持续失败每周期一次 WARNING
-- **错误类型命名**：`FETCH_FAILED` / `PARSE_FAILED` / `PUSH_FAILED` / `UPSTREAM_TIMEOUT` / `WEBSOCKET_CLOSED`
+- **Code quality**: `python -m pylint --rcfile=.pylintrc plugins/ app/ run.py server.py` should stay at 10.00/10
+- **Tests**: `python -m pytest tests/ -q`, 180 cases
+- **Logging**: only `INFO` / `WARNING` / `ERROR`; no spam on normal connect; one WARNING per persistent-failure cycle
+- **Error-type names**: `FETCH_FAILED` / `PARSE_FAILED` / `PUSH_FAILED` / `UPSTREAM_TIMEOUT` / `WEBSOCKET_CLOSED`
 
 ---
 
-## 故障排查
+## Troubleshooting
 
-| 现象 | 原因 | 解决 |
+| Symptom | Cause | Fix |
 |---|---|---|
-| 启动报 `DuplicateEndpointError` | path 已被其他插件占 | 改名；或合并到那个插件 |
-| 启动报 `endpoints 必须是非空 list` | `endpoints` 字段缺失或为空 | 至少 1 个 |
-| 启动报 `endpoints[0].path 必须以 /api/ 开头` | path 漏前缀 | 改成 `/api/xxx` |
-| 插件持续 WARNING | 上游不可达 / token 不对 | 检查网络；确认 `PLUGIN_CONFIG.token` 与 `manager.py` 分配的一致 |
-| 文档页某 endpoint `fields` 为空 | 没在插件里写、也没在 `docs_overrides.yaml` 写 | 二选一补上 |
-| 端口 8000 被占用 | 旧进程未退出 | 换端口 `python run.py --port 8001`，或 `lsof -i:8000` / Windows `netstat` 查 PID |
+| `DuplicateEndpointError` on startup | path is taken by another plugin | rename; or merge into that plugin |
+| `endpoints 必须是非空 list` | `endpoints` missing or empty | provide at least 1 |
+| `endpoints[0].path 必须以 /api/ 开头` | path missing prefix | use `/api/xxx` |
+| Persistent WARNING in plugin log | upstream unreachable / token mismatch | check network; ensure `PLUGIN_CONFIG.token` matches what `manager.py` issued |
+| Doc page shows empty `fields` for an endpoint | not declared in plugin nor in `docs_overrides.yaml` | fill one of the two |
+| Port 8000 in use | old process not exited | use a different port `python run.py --port 8001`, or `lsof -i:8000` / Windows `netstat` to find the PID |
 
 ---
 
-## 路线图
+## Roadmap
 
-- [ ] 插件热加载（无需重启主程序）
+- [ ] Hot-reload plugins (no main-process restart)
 
 ---
 
-## 许可证
+## License
 
 MIT

@@ -4,6 +4,8 @@
 
 主程序 [`PluginManager`](../../app/plugins/manager.py) 在启动时扫描本目录（按文件名排序），对每个插件文件以 `python plugins/<file>.py <callback_url> <token>` 方式 fork 子进程，并通过 `push` / `report_error` 回调把上游数据写回主进程的内存缓存。
 
+> 项目默认语言为英文。英文版见 [`README.md`](./README.md)。
+
 ## 目录约定
 
 - 文件名随意（建议用 `snake_case`，反映数据源或用途）
@@ -101,15 +103,15 @@ if __name__ == "__main__":  # pylint: disable=duplicate-code
 
 ## 2. `PLUGIN_CONFIG` 字段规范
 
-顶层字段（全部必填）：
+顶层字段（`name` / `token` / `endpoints` **必填**；`description` / `fields` 可选）：
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `name` | `str` | 插件名，也是 `/all` JSON 顶层 key。需与文件名含义一致，建议 snake_case |
-| `token` | `str` | 回调鉴权用 Bearer token。生产请走环境变量 |
-| `description` | `str` | 一句话说明上游来源 / 用途 |
-| `endpoints` | `list[dict]` | 该插件暴露的 endpoint，**非空** |
-| `fields` | `dict` | plugin 级字段文档（可空 `{}`），per-endpoint 可覆盖 |
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `name` | `str` | ✅ | 插件名，也是 `/all` JSON 顶层 key。需与文件名含义一致，建议 snake_case |
+| `token` | `str` | ✅ | 回调鉴权用 Bearer token。生产请走环境变量 |
+| `description` | `str` | ❌ | 一句话说明上游来源 / 用途 |
+| `endpoints` | `list[dict]` | ✅ | 该插件暴露的 endpoint，**非空** |
+| `fields` | `dict` | ❌ | plugin 级字段文档（可空 `{}`），per-endpoint 可覆盖 |
 
 `endpoints[].` 字段：
 
