@@ -42,7 +42,7 @@
 ### 安装
 
 ```bash
-git clone https://github.com/<your-username>/api-aggregator.git
+git clone https://github.com/NoMiaoYu/api-aggregator.git
 cd api-aggregator
 pip install -r requirements.txt
 ```
