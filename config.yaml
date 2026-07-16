@@ -1,0 +1,51 @@
+# =============================================================================
+# API Aggregator — Global project configuration
+# -----------------------------------------------------------------------------
+# Edit this file to change runtime behaviour; restart `python server.py` to
+# apply. Missing keys are auto-filled with the defaults shown in
+# `app/core/config.py`.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# language
+# ---------------------------------------------------------------------------
+# UI / documentation language. Affects which README / tutorial is shown as
+# the default entry point.
+# Allowed values: en | zh
+language: en
+
+# ---------------------------------------------------------------------------
+# server
+# ---------------------------------------------------------------------------
+server:
+  host: 127.0.0.1
+  port: 8000
+  # Log level for the main process: DEBUG / INFO / WARNING / ERROR
+  log_level: INFO
+
+# ---------------------------------------------------------------------------
+# callback
+# ---------------------------------------------------------------------------
+# Internal HTTP endpoint plugins use to push data back to the main process.
+callback:
+  base_path: /api/internal/callback
+
+# ---------------------------------------------------------------------------
+# plugins
+# ---------------------------------------------------------------------------
+plugins:
+  # Directory scanned for plugin .py files (relative to project root)
+  directory: plugins
+  # Seconds to wait for a plugin subprocess to come alive before giving up
+  start_timeout: 30
+  # Max auto-restarts before a plugin is marked dead (PluginManager)
+  max_restarts: 5
+
+# ---------------------------------------------------------------------------
+# docs
+# ---------------------------------------------------------------------------
+docs:
+  # Output directory for the generated static documentation
+  output_dir: docs
+  # User-editable endpoint doc override file
+  overrides_file: docs_overrides.yaml
