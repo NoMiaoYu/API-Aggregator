@@ -24,7 +24,7 @@ Usage
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any, Literal
 
@@ -83,12 +83,31 @@ class DocsConfig:
 # Top-level
 # ---------------------------------------------------------------------------
 
+# Pre-compute valid-field sets so ``from_dict`` can filter out unknown YAML
+# keys without instantiating ``fields()`` on every load. Keeping these
+# module-level (instead of per-call) avoids 4× repeated dataclass inspection.
+_SERVER_FIELDS = {f.name for f in fields(ServerConfig)}
+_CALLBACK_FIELDS = {f.name for f in fields(CallbackConfig)}
+_PLUGINS_FIELDS = {f.name for f in fields(PluginsConfig)}
+_DOCS_FIELDS = {f.name for f in fields(DocsConfig)}
+
+
+def _pick(cls_fields: set[str], raw: dict[str, Any]) -> dict[str, Any]:
+    """Return only the keys that ``cls`` actually declares.
+
+    YAML files often carry leftover / commented-out / forward-compat keys;
+    silently dropping them is friendlier than failing the whole load.
+    Type errors on **known** fields are still caught by the dataclass
+    constructor and surface as :class:`ConfigError`.
+    """
+    return {k: v for k, v in raw.items() if k in cls_fields}
+
 
 @dataclass(frozen=True)
 class AppConfig:
     """Top-level config aggregate."""
 
-    language: str = "en"
+    language: Language = "en"
     server: ServerConfig = field(default_factory=ServerConfig)
     callback: CallbackConfig = field(default_factory=CallbackConfig)
     plugins: PluginsConfig = field(default_factory=PluginsConfig)
@@ -138,10 +157,10 @@ class AppConfig:
             raise ConfigError(f"language 必须是 str: {language_raw!r}")
 
         try:
-            server = ServerConfig(**(data.get("server") or {}))
-            callback = CallbackConfig(**(data.get("callback") or {}))
-            plugins = PluginsConfig(**(data.get("plugins") or {}))
-            docs = DocsConfig(**(data.get("docs") or {}))
+            server = ServerConfig(**_pick(_SERVER_FIELDS, data.get("server") or {}))
+            callback = CallbackConfig(**_pick(_CALLBACK_FIELDS, data.get("callback") or {}))
+            plugins = PluginsConfig(**_pick(_PLUGINS_FIELDS, data.get("plugins") or {}))
+            docs = DocsConfig(**_pick(_DOCS_FIELDS, data.get("docs") or {}))
         except TypeError as exc:
             raise ConfigError(f"配置字段不合法: {exc}") from exc
 

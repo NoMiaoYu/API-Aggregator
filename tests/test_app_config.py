@@ -148,12 +148,89 @@ def test_load_invalid_yaml_raises(tmp_path: Path):
         AppConfig.load(p)
 
 
-def test_load_unknown_section_field_raises(tmp_path: Path):
-    """ServerConfig 没有 ``bogus`` 字段——应抛 ConfigError。"""
+def test_load_unknown_section_field_silently_ignored(tmp_path: Path):
+    """Section 内额外字段被忽略，合法字段正常加载。
+
+    设计：YAML 配置文件经常会留下注释掉的 / 旧的 / 试验性的字段，
+    加载期宽容处理对演进式配置更友好。
+    """
+    p = tmp_path / "extra.yaml"
+    p.write_text(
+        """
+server:
+  host: 0.0.0.0
+  port: 9000
+  legacy_setting: true   # 已被 dataclass 移除
+  experimental: 42       # 未实现
+""",
+        encoding="utf-8",
+    )
+    cfg = AppConfig.load(p)
+    assert cfg.server.host == "0.0.0.0"
+    assert cfg.server.port == 9000
+    # 未声明字段不能在 dataclass 上访问到
+    assert not hasattr(cfg.server, "legacy_setting")
+    assert not hasattr(cfg.server, "experimental")
+
+
+def test_load_known_field_with_wrong_type_does_not_raise(tmp_path: Path):
+    """已知字段类型错：dataclass 不做运行时类型检查，错误在使用时才暴露。
+
+    文档契约：配置层的 type 检查责任在调用方，AppConfig 只负责字段白名单。
+    真实业务代码如 ``cfg.server.port + 1`` 会抛 TypeError；此处只验证加载期
+    不抛。
+    """
     p = tmp_path / "bad.yaml"
-    p.write_text("server:\n  bogus: 1\n", encoding="utf-8")
-    with pytest.raises(ConfigError, match="配置字段不合法"):
-        AppConfig.load(p)
+    p.write_text("server:\n  port: 'not-a-number'\n", encoding="utf-8")
+    cfg = AppConfig.load(p)
+    assert cfg.server.port == "not-a-number"  # 原样存储
+
+
+def test_load_unknown_field_in_each_section_is_ignored(tmp_path: Path):
+    """所有 4 个 section 的未知字段都应被忽略。"""
+    p = tmp_path / "extra.yaml"
+    p.write_text(
+        """
+server:
+  host: 1.1.1.1
+  old: x
+callback:
+  base_path: /cb
+  foo: bar
+plugins:
+  directory: p
+  bogus: 1
+  future: 2
+docs:
+  output_dir: d
+  removed: y
+""",
+        encoding="utf-8",
+    )
+    cfg = AppConfig.load(p)
+    assert cfg.server.host == "1.1.1.1"
+    assert cfg.callback.base_path == "/cb"
+    assert cfg.plugins.directory == "p"
+    assert cfg.docs.output_dir == "d"
+
+
+def test_load_mixes_known_and_unknown_at_section_level(tmp_path: Path):
+    """同 section 混合已知 + 未知字段，已知字段必须被实例化。"""
+    p = tmp_path / "mix.yaml"
+    p.write_text(
+        """
+plugins:
+  directory: my-plugins
+  start_timeout: 60
+  extra_junk: keep-me-out
+  more: 1
+""",
+        encoding="utf-8",
+    )
+    cfg = AppConfig.load(p)
+    assert cfg.plugins.directory == "my-plugins"
+    assert cfg.plugins.start_timeout == 60
+    assert cfg.plugins.max_restarts == 5  # 默认
 
 
 # ------------------------- from_dict -------------------------
